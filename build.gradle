@@ -561,11 +561,37 @@ task integrationTest(type: Test) {
         ]
     }
 }
-
 tasks.integrationTest.finalizedBy(jacocoTestReport) // report is always generated after integration tests run
 
 //run the integrationTest task before the check task
 check.dependsOn integrationTest
+
+//create source set 'benchmarks'
+//add classes from the main source set to the compilation and runtime classpaths of the benchmarks
+sourceSets {
+    benchmarks {
+        java {
+            srcDir file ('src/benchmarks/java')
+            compileClasspath += sourceSets.main.output
+            runtimeClasspath += sourceSets.main.output
+        }
+        resources {
+            srcDir file('src/benchmarks/resources')
+        }
+        processBenchmarksResources {
+            duplicatesStrategy(DuplicatesStrategy.INCLUDE)
+        }
+    }
+}
+
+//add new task that runs integration tests
+task benchmark(type: JavaExec, dependsOn: benchmarksClasses) {
+    main = 'org.openjdk.jmh.Main'
+    classpath = sourceSets.benchmarks.compileClasspath + sourceSets.benchmarks.runtimeClasspath + sourceSets.main.runtimeClasspath
+}
+
+compileBenchmarksJava.options.compilerArgs.addAll(["-processor", "org.openjdk.jmh.generators.BenchmarkProcessor"])
+
 
 dependencies {
     implementation "org.opensearch.plugin:transport-netty4-client:${opensearch_version}"
@@ -742,6 +768,13 @@ dependencies {
     implementation('com.google.googlejavaformat:google-java-format:1.18.1') {
         exclude group: 'com.google.guava'
     }
+
+    benchmarksImplementation "org.openjdk.jmh:jmh-core:1.35"
+    benchmarksAnnotationProcessor "org.openjdk.jmh:jmh-generator-annprocess:1.35"
+
+    // Dependencies of JMH
+    benchmarksRuntimeOnly 'net.sf.jopt-simple:jopt-simple:5.0.4'
+    benchmarksRuntimeOnly 'org.apache.commons:commons-math3:3.2'
 }
 
 jar {
